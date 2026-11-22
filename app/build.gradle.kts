@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val ksPath = System.getenv("NYUSHU_KEYSTORE_PATH")
+val ksPath = System.getenv("NYUSHU_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
 
 android {
     namespace = "dev.nyushu.optimizer"

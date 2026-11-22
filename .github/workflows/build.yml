@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      HAS_KEYSTORE: ${{ secrets.NYUSHU_KEYSTORE_B64 != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -16,24 +18,27 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - uses: android-actions/setup-android@v3
-
-      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Android SDK (preinstalled on the runner)
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" || true
 
       - uses: gradle/actions/setup-gradle@v4
+
+      - run: chmod +x gradlew
 
       - name: Unit tests (core)
         run: ./gradlew :core:test --stacktrace
 
       - name: Decode signing key (optional)
-        if: ${{ env.HAS_KEYSTORE == 'true' }}
+        if: env.HAS_KEYSTORE == 'true'
         env:
-          HAS_KEYSTORE: ${{ secrets.NYUSHU_KEYSTORE_B64 != '' }}
-        run: echo "${{ secrets.NYUSHU_KEYSTORE_B64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
+          B64: ${{ secrets.NYUSHU_KEYSTORE_B64 }}
+        run: echo "$B64" | base64 -d > "$RUNNER_TEMP/release.jks"
 
       - name: Build APKs
         env:
-          NYUSHU_KEYSTORE_PATH: ${{ secrets.NYUSHU_KEYSTORE_B64 != '' && format('{0}/release.jks', runner.temp) || '' }}
+          NYUSHU_KEYSTORE_PATH: ${{ env.HAS_KEYSTORE == 'true' && format('{0}/release.jks', runner.temp) || '' }}
           NYUSHU_KEYSTORE_PASSWORD: ${{ secrets.NYUSHU_KEYSTORE_PASSWORD }}
           NYUSHU_KEY_ALIAS: ${{ secrets.NYUSHU_KEY_ALIAS }}
           NYUSHU_KEY_PASSWORD: ${{ secrets.NYUSHU_KEY_PASSWORD }}
@@ -50,6 +55,7 @@ jobs:
         with:
           name: nyushu-optimizer-apk
           path: dist/*
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
